@@ -7,7 +7,7 @@
 import asyncio
 import logging
 import websockets
-from datetime import datetime
+from datetime import datetime, timezone
 from collections import defaultdict
 
 from ocpp.routing import on
@@ -111,14 +111,36 @@ class ChargePoint(cp):
         )
         return response
 
-    @on('StatusNotification')
-    async def on_status_notification(self, connector_id, error_code, status, **kwargs):
-        for i in kwargs:
-            print("Argument: ", i, " value: ", kwargs[i])
-
     @on('MeterValues')
     async def on_meter_values(self, connector_id: int, meter_value: dict, **kwargs):
-        transaction_id: int = kwargs.get("transaction_id.name, 0")
+        transaction_id: int = kwargs.get(om.transaction_id.name, 0)
+        return call_result.MeterValuesPayload()
+
+    @on('Heartbeat')
+    async def on_heartbeat(self, **kwargs):
+        now = datetime.utcnow()
+        self._metrics[cstat.heartbeat.value].value = now
+        return call_result.HeartbeatPayload(
+            current_time=now.strftime("%Y-%m-%dT%H:%M:%SZ")
+        )
+
+    @on('StatusNotification')
+    async def on_status_notification(self, connector_id, error_code, status, **kwargs):
+        if connector_id == 0 or connector_id is None:
+            self._metrics[cstat.status.value].value = status
+            self._metrics[cstat.error_code.value].value = error_code
+        elif connector_id == 1:
+            self._metrics[cstat.status_connector.value].value = status
+            self._metrics[cstat.error_code_connector.value].value = error_code
+        if connector_id >= 1:
+            self._metrics[cstat.status_connector.value].extra_attr[
+                connector_id
+            ] = status
+            self._metrics[cstat.error_code_connector.value].extra_attr[
+                connector_id
+            ] = error_code
+
+        return call_result.StatusNotificationPayload()
 
 
 async def on_connect(websocket, path):
