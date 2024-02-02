@@ -143,6 +143,13 @@ class ChargePoint(cp):
 
         return call_result.StatusNotificationPayload()
 
+    @on('Authorize')
+    async def on_authorize(self, id_tag, **kwargs):
+        # handle authorization requests
+        self._metrics[cstat.id_tag.value].value = id_tag
+        auth_status = self.get_authorization_status(id_tag)
+        return call_result.AuthorizePayload(id_tag_info={om.status.value: auth_status})
+
     @on('StartTransaction')
     async def on_start_transaction(self, connector_id, id_tag, meter_start, **kwargs):
         # handle a Start Transaction event
