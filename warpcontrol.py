@@ -7,12 +7,16 @@
 import asyncio
 import logging
 import websockets
+import time
 from datetime import datetime, timezone
 from collections import defaultdict
 
 from ocpp.routing import on
 from ocpp.v16 import ChargePoint as cp, call, call_result
-from ocpp.v16.enums import RegistrationStatus
+from ocpp.v16.enums import (
+    AuthorizationStatus,
+    RegistrationStatus,
+)
 
 import uuid
 from enums import (
@@ -85,6 +89,7 @@ class ChargePoint(cp):
         self.received_boot_notification = None
         self._metrics = defaultdict(lambda: Metric(None, None))
         self._metrics[cdet.identifier.value].value = id
+        self.active_transaction_id: int = 0
 
     @on('BootNotification')
     async def on_boot_notification(self, **kwargs):
