@@ -114,6 +114,7 @@ class ChargePoint(cp):
     @on('MeterValues')
     async def on_meter_values(self, connector_id: int, meter_value: dict, **kwargs):
         transaction_id: int = kwargs.get(om.transaction_id.name, 0)
+        print("Transaction-ID: ", transaction_id)
         return call_result.MeterValuesPayload()
 
     @on('Heartbeat')
@@ -141,6 +142,48 @@ class ChargePoint(cp):
             ] = error_code
 
         return call_result.StatusNotificationPayload()
+
+    @on('StartTransaction')
+    async def on_start_transaction(self, connector_id, id_tag, meter_start, **kwargs):
+        # handle a Start Transaction event
+        auth_status = self.get_authorization_status(id_tag)
+        if auth_status == AuthorizationStatus.accepted.value:
+            self.active_transaction_id = int(time.time())
+            self._metrics[cstat.id_tag.value].value = id_tag
+            self._metrics[cstat.stop_reason.value].value = ""
+            self._metrics[csess.transaction_id.value].value = self.active_transaction_id
+            self._metrics[csess.meter_start.value].value = int(meter_start) / 1000
+            result = call_result.StartTransactionPayload(
+                id_tag_info={om.status.value: AuthorizationStatus.accepted.value},
+                transaction_id=self.active_transaction_id,
+            )
+        else:
+            result = call_result.StartTransactionPayload(
+                id_tag_info={om.status.value: auth_status}, transaction_id=0
+            )
+        return result
+
+    def get_authorization_status(self, id_tag):
+        # get the authorization for an id_tag
+        # get the default authorization status. Use accept if not configured
+        # default_auth_status = config.get(
+        #    CONF_DEFAULT_AUTH_STATUS, AuthorizationStatus.accepted.value
+        # )
+        # auth_list = config.get(CONF_AUTH_LIST, {})
+        auth_list = {}
+        auth_status = None
+        for auth_entry in auth_list:
+            id_entry = auth_entry.get(CONF_ID_TAG, None)
+            if id_tag == id_entry:
+                auth_status = auth_entry.get(CONF_AUTH_STATUS, default_auth_status)
+                logging.debug(f"id_tag='{id_tag}' found in auth_list, authorization status='{auth_status}'")
+                break
+
+        if auth_status is None:
+            auth_status = default_auth_status
+            logging.debug(f"id_tag='{id_tag}' not found in auth_list, default authorization_status='{auth_status}'")
+
+        return auth_status
 
 
 async def on_connect(websocket, path):
