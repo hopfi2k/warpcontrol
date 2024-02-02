@@ -169,6 +169,7 @@ class ChargePoint(cp):
                 id_tag_info={om.status.value: AuthorizationStatus.accepted.value},
                 transaction_id=self.active_transaction_id,
             )
+
         else:
             result = call_result.StartTransactionPayload(
                 id_tag_info={om.status.value: auth_status}, transaction_id=0
