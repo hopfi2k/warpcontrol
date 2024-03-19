@@ -8,6 +8,7 @@ import asyncio
 import logging
 import websockets
 import time
+import socket
 from datetime import datetime, timezone
 from collections import defaultdict
 
@@ -16,6 +17,7 @@ from ocpp.v16 import ChargePoint as cp, call, call_result
 from ocpp.v16.enums import (
     AuthorizationStatus,
     RegistrationStatus,
+    ResetType,
 )
 
 import uuid
@@ -28,6 +30,13 @@ from enums import (
     OcppMisc as om,
     Profiles as prof,
 )
+
+from fastapi import Body, FastAPI, status, Request, WebSocket, Depends
+
+CONF_AUTH_STATUS = "authorization_status"
+CONF_ID_TAG = "id_tag"
+
+app = FastAPI()
 
 KNOWN_IDS = ['f8026771-4816-4127-a8fd-79f82b853706']
 
@@ -130,6 +139,9 @@ class ChargePoint(cp):
             current_time=now.strftime("%Y-%m-%dT%H:%M:%SZ")
         )
 
+    async def reset(self, rtype: ResetType):
+        return await self.call(call.ResetPayload(type=rtype))
+
     @on('StatusNotification')
     async def on_status_notification(self, connector_id, error_code, status, **kwargs):
         if connector_id == 0 or connector_id is None:
@@ -228,6 +240,46 @@ async def on_connect(websocket, path):
     await cp.start()
 
 
+class CentralSystem:
+    def __init__(self):
+        self._chargers = {}
+
+    def register_charger(self, cp: ChargePoint):
+        queue = asyncio.Queue(maxsize=1)                # set maximum chargers
+        task = asyncio.create_task(self.start_charger(cp, queue))
+        self._chargers[cp] = task
+        print(self._chargers)
+        return queue
+
+    async def start_charger(self, cp, queue):
+        try:
+            await cp.start()
+        except Exception as error:
+            print(f"Charger {cp.id} disconnected: {error}")
+        finally:
+            del self._chargers[cp]
+            await queue.put(True)
+
+    async def reset_fun(self, cp_id: str, reset_type: str):
+        print(self._chargers.items())   # why is this list empty?
+        for cp, task in self._chargers.items():
+            print(cp.id)
+            if cp.id == cp_id:
+                print('reached here...')
+                await cp.reset(reset_type)
+
+
+class SocketAdapter:
+    def __init__(self, websocket: WebSocket):
+        self._ws = websocket
+
+    async def recv(self) -> str:
+        return await self._ws.receive_text()
+
+    async def send(self, msg):
+        await self._ws.send_text(msg)
+
+
 async def main():
     server = await websockets.serve(
         on_connect,
@@ -243,4 +295,6 @@ async def main():
 
 
 if __name__ == "__main__":
+    ip = socket.gethostbyname(socket.gethostname())
+    print(f"Your wallbox should connect to: ws://{ip}:{9000}")
     asyncio.run(main())
