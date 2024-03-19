@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 import asyncio
 
+
 async def websocket_server():
     """
     async function to start websocket server main function. It will run as separate task in fastapi
@@ -15,6 +16,7 @@ async def websocket_server():
 
 app = FastAPI()
 
+
 @app.on_event("startup")
 async def startup_event():
     # Create the asyncio task when the application starts up
@@ -27,4 +29,3 @@ async def closure_event():
     # Create the asyncio task when the application starts up
     global websocket_server_instance
     websocket_server_instance.done()
-

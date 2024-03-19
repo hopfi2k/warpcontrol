@@ -1,3 +1,6 @@
+from __future__ import annotations
+from data_store.schemas import *
+from data_store.charge_point_db import register_new_station, charging_activity, check_existing_stations
 import asyncio
 import websockets.protocol
 import websockets.server
@@ -92,6 +95,7 @@ from data_store.enums import (
 
 from utility.custom_logger import logger
 from data_store.charge_point_db import charge_points
+
 
 class MetricCollector:
     """Server for handling OCPP connections."""
@@ -447,7 +451,7 @@ class ChargePoint(cp):
             except vol.MultipleInvalid as e:
                 logger.debug("Failed to parse url: %s", e)
             update_time = (
-                datetime.now(tz=timezone.utc) + timedelta(hours=wait_time)
+                    datetime.now(tz=timezone.utc) + timedelta(hours=wait_time)
             ).strftime("%Y-%m-%dT%H:%M:%SZ")
             req = call.UpdateFirmwarePayload(location=url, retrieve_date=update_time)
             resp = await self.call(req)
@@ -488,7 +492,8 @@ class ChargePoint(cp):
                     "data": {"result": resp.data}}
         else:
             logger.warning("Failed with response: %s", resp.status)
-            return {"status_code": status.HTTP_400_BAD_REQUEST, "message": f"data transfer event failed with status {resp.status}",
+            return {"status_code": status.HTTP_400_BAD_REQUEST,
+                    "message": f"data transfer event failed with status {resp.status}",
                     "data": {}}
 
     async def _handle_call(self, msg):
@@ -607,8 +612,6 @@ class ChargePoint(cp):
                 self._requires_reboot = True
             return {"status_code": status.HTTP_200_OK, "message": f"{key} configuration successful",
                     "data": {"requires_reboot": True}}
-
-
 
     async def _get_specific_response(self, unique_id, timeout):
         # The ocpp library silences CallErrors by default. See
